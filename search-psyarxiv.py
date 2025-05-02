@@ -22,7 +22,7 @@ BASE_URL = 'https://api.osf.io/v2/preprints/'
 PROVIDER = 'psyarxiv'  # Specific provider for PsyArXiv
 OUTPUT_CSV = 'psyarxiv_results_clean.csv'
 MAX_RESULTS_PER_PAGE = 100  
-MAX_PAGES = 20  
+MAX_PAGES = 1000  
 WAIT_TIME = 1  
 
 
