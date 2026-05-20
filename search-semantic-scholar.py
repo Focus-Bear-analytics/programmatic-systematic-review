@@ -10,9 +10,9 @@ load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 
 # --- Configurable Settings ---
-MAX_RESULTS = 500  # Total number of papers to fetch
+MAX_RESULTS = 5000  # Total number of papers to fetch
 BATCH_SIZE = 100  # API batch size per request
-START_YEAR = 2015  # Only fetch papers published from this year onward
+START_YEAR = 2000  # Only fetch papers published from this year onward
 QUERY_VARIANTS = [
     "digital autism ADHD adults",
     "mobile app autism ADHD",
