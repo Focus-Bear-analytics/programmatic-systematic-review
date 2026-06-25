@@ -60,7 +60,8 @@ EXCLUDING_AGREED = {
     "study_type": {"review", "protocol", "proposal", "commentary"},
     "intervention_type": {
         "no_intervention", "data_collection_only", "parent_training",
-        "telecoaching", "telecounselling", "wearable", "vr_ar", "non_software_based",
+        "telecoaching", "telecounselling", "wearable", "vr_ar", "video_modeling",
+        "non_software_based",
     },
 }
 
@@ -400,10 +401,15 @@ async function boot(){
   pos = 0; await load(); updateProg();
 }
 function updateProg(){
-  const pct = META.total_disagreements ? Math.round(100*META.resolved/META.total_disagreements) : 100;
+  // "remaining" = what's left in this session's working list; "resolved" = rows
+  // you've adjudicated (cumulative). Total = resolved + remaining (the queue
+  // shrinks as re-classification auto-excludes rows, so use a live denominator).
+  const remaining = ORDER.length;
+  const total = META.resolved + remaining;
+  const pct = total ? Math.round(100*META.resolved/total) : 100;
   document.getElementById('barfill').style.width = pct+'%';
   document.getElementById('prog').textContent =
-    `${META.resolved}/${META.total_disagreements} resolved · ${META.agreed} auto-agreed`;
+    `${remaining} left · ${META.resolved} done · ${META.agreed} auto-agreed`;
 }
 async function load(){
   const idx = ORDER[pos];
@@ -460,8 +466,9 @@ async function save(){
   const decisions={}; paper.fields.forEach(fd=>decisions[fd.name]=fd.current);
   await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({idx:paper.idx, decisions})});
-  META.resolved++; updateProg();
+  META.resolved++;
   ORDER.splice(pos,1);
+  updateProg();
   if(pos>=ORDER.length) pos=ORDER.length-1;
   if(!ORDER.length){ paper=null; renderDone(); return; }
   await load();
