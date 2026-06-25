@@ -62,7 +62,7 @@ ALLOWED = {
         "mobile_app", "web_app", "software_tool", "video_game", "neurofeedback",
         "cbt", "cognitive_training", "mindfulness", "chatbot", "biofeedback",
         "telecoaching", "telecounselling", "wearable", "vr_ar", "video_modeling",
-        "social_skills_training", "physical_activity", "robotics", "music_art_therapy",
+        "social_skills_training", "aac", "physical_activity", "robotics", "music_art_therapy",
         "elearning", "non_software_based",
         "parent_training", "data_collection_only", "no_intervention", UNSPECIFIED,
     ],
@@ -123,6 +123,7 @@ Fields:
    vr_ar (immersive virtual reality via a headset or CAVE, or an augmented-reality system) >
    video_modeling (watching video demonstrations/models of target behaviours/skills — incl. video self-modeling — to observe and imitate; passive video even if shown on a device) >
    elearning (passive online courses, e-learning modules, webinars, or video lectures — content consumed, not an interactive tool) >
+   aac (augmentative & alternative communication — speech-generating devices, picture-exchange/PECS, symbol or communication apps/boards; supports communication, not attention/EF/emotion regulation) >
    social_skills_training (a program teaching social or communication skills) >
    physical_activity (exercise, sport, yoga, or physical-activity programs) >
    robotics (a robot-assisted intervention — physical or social robot) >
