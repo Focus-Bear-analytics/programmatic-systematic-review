@@ -60,7 +60,7 @@ EXCLUDING_AGREED = {
     "study_type": {"review", "protocol", "proposal", "commentary"},
     "intervention_type": {
         "no_intervention", "data_collection_only", "parent_training",
-        "telecoaching", "telecounselling", "wearable", "non_software_based",
+        "telecoaching", "telecounselling", "wearable", "vr_ar", "non_software_based",
     },
 }
 
