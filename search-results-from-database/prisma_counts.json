@@ -1,0 +1,48 @@
+{
+  "stages": {
+    "combine": {
+      "timestamp": "2026-06-02T06:55:52",
+      "total": 4817,
+      "from_cache": 1
+    },
+    "dedupe": {
+      "timestamp": "2026-06-02T06:55:52",
+      "identified": 4817,
+      "duplicates": 1676,
+      "unique": 3141,
+      "from_cache": 1
+    },
+    "fill_abstracts": {
+      "timestamp": "2026-05-25T16:19:39",
+      "total": 4817,
+      "with_abstract": 4643,
+      "candidates": 50,
+      "fetched": 0,
+      "failed": 50,
+      "propagated_to_duplicates": 0,
+      "by_source": {},
+      "skipped_no_doi": 119,
+      "skipped_duplicate": 5
+    },
+    "classify": {
+      "timestamp": "2026-05-27T11:17:22",
+      "total": 4817,
+      "consensus_reached": 1955,
+      "consensus_not_reached": 1186
+    },
+    "adjudicate": {
+      "timestamp": "2026-05-28T11:59:27",
+      "unique_final_labelled": 2972,
+      "by_agreement": 1955,
+      "adjudicated_by_claude": 1017,
+      "target_adults_adhd_autism_software": 320,
+      "target_empirical": 220
+    },
+    "screen": {
+      "timestamp": "2026-06-25T10:37:25",
+      "total": 9141,
+      "passed": 3490,
+      "short_circuited": 5651
+    }
+  }
+}
