@@ -61,7 +61,8 @@ EXCLUDING_AGREED = {
     "intervention_type": {
         "no_intervention", "data_collection_only", "parent_training",
         "telecoaching", "telecounselling", "wearable", "vr_ar", "video_modeling",
-        "non_software_based",
+        "social_skills_training", "physical_activity", "robotics", "music_art_therapy",
+        "elearning", "non_software_based",
     },
 }
 
@@ -74,7 +75,8 @@ EXCLUDING_AGREED = {
 INCLUDING_AGREED = {
     "has_adults": {"yes"},
     "study_type": {"empirical_with_results", "qualitative_only_study", "case_study"},
-    "intervention_type": {"mobile_app", "web_app", "software_tool", "video_game", "neurofeedback"},
+    "intervention_type": {"mobile_app", "web_app", "software_tool", "video_game", "neurofeedback",
+                          "cbt", "cognitive_training", "mindfulness", "chatbot", "biofeedback"},
     "neurotypes": {"adhd", "autistic", "audhd"},
 }
 

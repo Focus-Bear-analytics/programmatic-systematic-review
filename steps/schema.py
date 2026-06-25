@@ -60,8 +60,10 @@ ALLOWED = {
     ],
     "intervention_type": [
         "mobile_app", "web_app", "software_tool", "video_game", "neurofeedback",
+        "cbt", "cognitive_training", "mindfulness", "chatbot", "biofeedback",
         "telecoaching", "telecounselling", "wearable", "vr_ar", "video_modeling",
-        "non_software_based",
+        "social_skills_training", "physical_activity", "robotics", "music_art_therapy",
+        "elearning", "non_software_based",
         "parent_training", "data_collection_only", "no_intervention", UNSPECIFIED,
     ],
     "neurotypes": [
@@ -117,7 +119,28 @@ Fields:
   REVIEWS: a systematic review or meta-analysis OF interventions counts as evaluating an intervention — classify the TYPE of intervention reviewed (most prominent), NOT "no_intervention". Only use "no_intervention" for a review whose topic is not an intervention (e.g. a review of prevalence or aetiology).
   REVIEWS: a systematic review or meta-analysis OF interventions counts as evaluating an intervention — classify the TYPE of intervention reviewed (most prominent), NOT "no_intervention". Only use "no_intervention" for a review whose topic is not an intervention (e.g. a review of prevalence or aetiology).
   STEP 2 — if an intervention IS delivered/evaluated, FIRST check for parent/caregiver mediation: if the intervention is training, education, or coaching delivered to PARENTS or CAREGIVERS so they can support/manage a child (e.g. Behavioural Parent Training, parent management training, caregiver-mediated programmes) -> use "parent_training", regardless of how it is delivered (app, web, in person). The index participant being trained is the parent, not the person with ADHD/autism, so it is off-target for this review.
-  Otherwise choose by this precedence (first that applies): vr_ar (immersive virtual reality via a headset or CAVE, or an augmented-reality system) > video_modeling (the intervention is watching video demonstrations/models of target behaviours or skills — including video self-modeling — to observe and imitate; passive video content even if shown on a device) > video_game (the active intervention is a video game, "serious game", or gamified training program — interactive play with goals/feedback to train attention, EF, or emotion regulation — regardless of whether it runs on a phone, web, or console) > neurofeedback (the intervention trains self-regulation of brain activity via real-time feedback of a neural signal, e.g. EEG or fMRI neurofeedback) > mobile_app (smartphone/tablet app) > web_app (browser/online program or website) > wearable (body-worn device) > telecoaching (remote human coaching) > telecounselling (remote therapy/counselling) > software_tool (other standalone/desktop software with no app or web delivery) > non_software_based (a real intervention with NO digital component — e.g. face-to-face therapy, medication, in-person coaching, a printed workbook, an exercise programme).
+  Otherwise classify by the PRIMARY approach/modality, by this precedence (first that applies). Identify the intervention by its DEFINING approach first, then fall back to the delivery medium:
+   vr_ar (immersive virtual reality via a headset or CAVE, or an augmented-reality system) >
+   video_modeling (watching video demonstrations/models of target behaviours/skills — incl. video self-modeling — to observe and imitate; passive video even if shown on a device) >
+   elearning (passive online courses, e-learning modules, webinars, or video lectures — content consumed, not an interactive tool) >
+   social_skills_training (a program teaching social or communication skills) >
+   physical_activity (exercise, sport, yoga, or physical-activity programs) >
+   robotics (a robot-assisted intervention — physical or social robot) >
+   music_art_therapy (music, art, dance, or drama therapy) >
+   parent_training (already handled above) >
+   neurofeedback (trains self-regulation of brain activity via real-time feedback of a neural signal, e.g. EEG/fMRI) >
+   biofeedback (real-time feedback of a NON-neural physiological signal — heart-rate variability, breathing, skin conductance — for self-regulation) >
+   cbt (cognitive behavioural therapy or a structured CBT-/DBT-/ACT-based psychological program delivered digitally) >
+   mindfulness (a mindfulness or meditation program/app) >
+   cognitive_training (computerised cognitive or working-memory/attention training, e.g. Cogmed, n-back, attention-bias drills) >
+   video_game (a video game / "serious game" / gamified training program — interactive play with goals/feedback) >
+   chatbot (a conversational agent, chatbot, or virtual coach the user converses with) >
+   mobile_app (smartphone/tablet app, where no more specific approach above applies) >
+   web_app (browser/online program or website) >
+   wearable (body-worn device) >
+   telecoaching (remote human coaching) > telecounselling (remote therapy/counselling) >
+   software_tool (other standalone/desktop software with no app or web delivery) >
+   non_software_based (a real intervention with NO digital component — face-to-face therapy, medication, in-person coaching, a printed workbook).
   For a review spanning several intervention types, pick the single most prominent; if none dominates, use "{UNSPECIFIED}". Use "{UNSPECIFIED}" only when an intervention clearly exists but its nature cannot be determined from the abstract.
 
 - intervention_details: short sentence describing the intervention, or "no intervention" if there is none (free text, max ~25 words).

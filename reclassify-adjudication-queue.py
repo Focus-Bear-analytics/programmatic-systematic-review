@@ -34,12 +34,14 @@ EXCLUDING_AGREED = {
     "study_type": {"review", "protocol", "proposal", "commentary"},
     "intervention_type": {"no_intervention", "data_collection_only", "parent_training",
                           "telecoaching", "telecounselling", "wearable", "vr_ar",
-                          "video_modeling", "non_software_based"},
+                          "video_modeling", "social_skills_training", "physical_activity",
+                          "robotics", "music_art_therapy", "elearning", "non_software_based"},
 }
 INCLUDING_AGREED = {
     "has_adults": {"yes"},
     "study_type": {"empirical_with_results", "qualitative_only_study", "case_study"},
-    "intervention_type": {"mobile_app", "web_app", "software_tool", "video_game", "neurofeedback"},
+    "intervention_type": {"mobile_app", "web_app", "software_tool", "video_game", "neurofeedback",
+                          "cbt", "cognitive_training", "mindfulness", "chatbot", "biofeedback"},
     "neurotypes": {"adhd", "autistic", "audhd"},
 }
 # has_under_18 doesn't gate the adults review, so a disagreement on it alone is
