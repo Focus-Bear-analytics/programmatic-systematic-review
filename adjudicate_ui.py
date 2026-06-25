@@ -288,6 +288,11 @@ class State:
             a = str(row.get(f"{self.a_pref}_{f}", "")).strip()
             b = str(row.get(f"{self.b_pref}_{f}", "")).strip()
             cur = str(row.get(f"Final_{f}", "")).strip() or str(row.get(f"Human_{f}", "")).strip()
+            # Pre-select fields the raters already agree on, so the human only has
+            # to resolve the actual disagreement(s) (and isn't blocked by "pick a
+            # value for every field" on the agreed ones).
+            if not cur and a and a.lower() == b.lower():
+                cur = a
             fields.append({
                 "name": f,
                 "a": a,
