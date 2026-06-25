@@ -22,7 +22,7 @@ TEXT_DIR = "full_text_snowball"
 os.makedirs(TEXT_DIR, exist_ok=True)
 EMAIL = os.getenv("UNPAYWALL_EMAIL")
 
-DIGITAL = {"mobile_app", "web_app", "software_tool", "wearable"}
+DIGITAL = {"mobile_app", "web_app", "software_tool", "video_game", "wearable"}
 ND = {"adhd", "autistic", "audhd"}
 
 enr = pd.read_csv(ENR, dtype=str).fillna("")
