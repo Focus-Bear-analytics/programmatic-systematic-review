@@ -2,3 +2,26 @@
 __pycache__/
 .DS_Store
 .claude/worktrees
+
+# logs
+*.log
+
+# extracted publisher full text (copyrighted) — never commit
+full_text/
+full_text_snowball/
+
+# local secrets / backups / editor lock files
+*.bak-deadkey
+.env.bak*
+*backup*.csv
+*_pre_*.csv
+~$*.xlsx
+
+# large derived datasets — regenerable from the pipeline; kept out of git
+search-results-from-database/*.csv
+search-results-from-database/combined/
+search-results-from-database/snowball/
+search-results-from-database/database-csvs/
+search-results-from-database/_backup_pre_snowball_screen/
+citation-scraping/*.csv
+citation-scraping/*.txt

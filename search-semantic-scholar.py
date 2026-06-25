@@ -1,169 +1,134 @@
-import requests
-import pandas as pd
 import os
 import time
+
+import pandas as pd
+import requests
 from dotenv import load_dotenv
-from openai import OpenAI
 
-# Load API key
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 
-# --- Configurable Settings ---
-MAX_RESULTS = 5000  # Total number of papers to fetch
-BATCH_SIZE = 100  # API batch size per request
-START_YEAR = 2000  # Only fetch papers published from this year onward
-QUERY_VARIANTS = [
-    "digital autism ADHD adults",
-    "mobile app autism ADHD",
-    "software ADHD autism intervention",
-    "e-health ADHD autism adults"
-]  # Multiple search queries
+# Boolean query mirroring the other databases' searches (see
+# search-results-from-database/database-csvs/search_queries.txt), translated to
+# Semantic Scholar bulk-search operators:
+#   `|` = OR, `+` = AND, `*` = prefix wildcard, `"..."` = phrase, `()` = grouping.
+SEARCH_QUERY = (
+    '(ADHD | autis* | ASD | Asperger* | AuDHD) '
+    '+ (app | "mobile application" | mHealth | eHealth | "digital tool" '
+    '| "web-based" | software | "digital therapeutics") '
+    '+ adult'
+)
 
-# --- Search Semantic Scholar with Pagination ---
-def search_semantic_scholar(query):
+MAX_RESULTS = 5000
+FIELDS = "title,abstract,authors,year,url,venue,externalIds"
+
+# The bulk endpoint supports the boolean query syntax above (the relevance
+# `/paper/search` endpoint does not) and paginates with a continuation token,
+# returning up to 1000 records per page.
+S2_BULK_URL = "https://api.semanticscholar.org/graph/v1/paper/search/bulk"
+
+# Output lands in the pipeline's input directory so combine.py picks it up as
+# another source (Source = "semantic_scholar").
+OUTPUT_CSV = os.path.join(
+    "search-results-from-database", "database-csvs", "semantic_scholar.csv"
+)
+
+
+def search_semantic_scholar(query, api_key=None):
+    """Fetch papers from Semantic Scholar's bulk search, following the token.
+
+    If an API key is supplied but rejected (401/403), fall back to
+    unauthenticated requests for the rest of the run rather than failing.
     """
-    Fetches academic papers from Semantic Scholar with pagination.
-    """
-    url = "https://api.semanticscholar.org/graph/v1/paper/search"
-    headers = {"Accept": "application/json"}
+    use_key = bool(api_key)
     all_results = []
-    offset = 0
+    token = None
 
     while len(all_results) < MAX_RESULTS:
-        params = {
-            "query": query,
-            "limit": BATCH_SIZE,
-            "offset": offset,
-            "fields": "title,abstract,authors,year,url,externalIds"
-        }
+        params = {"query": query, "fields": FIELDS}
+        if token:
+            params["token"] = token
 
         for attempt in range(5):
-            response = requests.get(url, headers=headers, params=params)
+            headers = {"Accept": "application/json"}
+            if use_key:
+                headers["x-api-key"] = api_key
+            response = requests.get(S2_BULK_URL, headers=headers, params=params)
+
             if response.status_code == 200:
                 break
-            elif response.status_code == 429:
+            if response.status_code in (401, 403) and use_key:
+                print("⚠️ API key rejected (HTTP "
+                      f"{response.status_code}); falling back to unauthenticated.")
+                use_key = False
+                continue
+            if response.status_code == 429:
                 wait = 2 ** attempt
-                print(f"⚠️ Rate limited. Waiting {wait} seconds before retry...")
+                print(f"⚠️ Rate limited. Waiting {wait}s before retry...")
                 time.sleep(wait)
-            else:
-                print(f"❌ Error {response.status_code}: {response.text}")
-                print("🔍 Query debug info:")
-                print(f"   Query: {query}")
-                print(f"   Offset: {offset}")
-                print(f"   Limit: {BATCH_SIZE}")
-                print(f"   Params: {params}")
-                break
-
+                continue
+            print(f"❌ Error {response.status_code}: {response.text[:200]}")
+            return all_results[:MAX_RESULTS]
         else:
-            print("❌ Max retries hit. Skipping this batch.")
+            print("❌ Max retries hit. Stopping.")
             break
 
-
         data = response.json()
-        papers = data.get("data", [])
-        
-        if not papers:
-            break  # Stop if no more results
-
+        papers = data.get("data") or []
+        if not all_results:
+            print(f"📊 Semantic Scholar reports {data.get('total')} total matches.")
         all_results.extend(papers)
-        offset += BATCH_SIZE  # Move to next batch
+        print(f"📄 Retrieved {len(all_results)} papers so far...")
 
-        print(f"📄 Retrieved {len(all_results)} papers so far for query: {query}")
-
-        time.sleep(2)  # Respect API rate limits
+        token = data.get("token")
+        if not token or not papers:
+            break
+        # Be polite to the shared rate-limit pool when unauthenticated.
+        time.sleep(1 if use_key else 2)
 
     return all_results[:MAX_RESULTS]
 
-# --- Filter Studies Matching Digital & AuDHD Criteria ---
-def filter_studies(papers):
-    keywords_digital = ["digital", "app", "technology", "intervention", "e-health", "mobile", "smartphone", "software"]
-    keywords_adhd_autism = ["ADHD", "autism", "AuDHD", "autistic", "attention deficit", "hyperactivity disorder"]
 
-    filtered = []
-    for paper in papers:
-        # Extract DOI if available
-        doi = paper.get("externalIds", {}).get("DOI", "")
-        title = paper.get("title", "No Title")
-        year = paper.get("year", 0)
-        abstract = paper.get("abstract", "")
-        url = paper.get("url", "")
-        authors = ", ".join([a["name"] for a in paper.get("authors", [])])
-
-        # Ignore papers before START_YEAR
-        if year and year < START_YEAR:
+def to_rows(papers):
+    """Map S2 records to the pipeline's standard columns, de-duped within the run."""
+    rows = []
+    seen = set()
+    for p in papers:
+        ext = p.get("externalIds") or {}
+        doi = (ext.get("DOI") or "").strip()
+        key = doi.lower() if doi else p.get("paperId", "")
+        if key in seen:
             continue
+        seen.add(key)
+        rows.append({
+            "Title": p.get("title") or "",
+            "Abstract": p.get("abstract") or "",
+            "Authors": ", ".join(a.get("name", "") for a in (p.get("authors") or [])),
+            "Year": p.get("year") or "",
+            "DOI": doi,
+            "PMID": ext.get("PubMed") or "",
+            "URL": p.get("url") or "",
+            "Journal": p.get("venue") or "",
+        })
+    return rows
 
-        # Check if title/abstract contain relevant keywords
-        text = f"{title} {abstract}".lower()
-        if any(k.lower() in text for k in keywords_digital) and any(k.lower() in text for k in keywords_adhd_autism):
-            filtered.append({
-                "DOI": doi if doi else title,  # Use DOI as key, fallback to title if no DOI
-                "Title": title,
-                "Abstract": abstract,
-                "Authors": authors,
-                "Year": year,
-                "URL": url
-            })
-    return filtered
 
-# --- Load Cached Results (Avoid Reprocessing Papers) ---
-def load_existing_results(filename="semantic_scholar_filtered.csv"):
-    if os.path.exists(filename):
-        return pd.read_csv(filename).to_dict(orient="records")
-    return []
-
-# --- LLM Filtering with GPT-4o ---
-def llm_filter(title, abstract):
-    system_prompt = (
-        "You are a research assistant helping conduct a systematic literature review. "
-        "Only include papers that describe a digital intervention (such as an app or software) "
-        "for adults with both ADHD and autism (AuDHD). Be strict."
-    )
-
-    user_prompt = f"Title: {title}\nAbstract: {abstract}\n\nPlease respond with:\nInclude: true/false\nRationale: [short explanation]"
-
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-        temperature=0.3,
-    )
-
-    return response.choices[0].message.content
-
-# --- Main Workflow ---
 def main():
-    print("🔍 Searching Semantic Scholar...")
+    print("🔍 Searching Semantic Scholar (bulk boolean query)...")
+    # DISABLED 2026-06: dead institutional key (403). Force keyless S2 (200, 1 req/s).
+    api_key = None  # os.getenv("SEMANTIC_SCHOLAR_API_KEY") or os.getenv("S2_API_KEY")
+    if api_key:
+        print("Semantic Scholar: API key loaded.")
+    else:
+        print("Semantic Scholar: no key — using unauthenticated limits.")
 
-    # Load previous results (cache)
-    existing_results = load_existing_results()
-    existing_dois = {paper.get("DOI", paper.get("Title")) for paper in existing_results}
+    papers = search_semantic_scholar(SEARCH_QUERY, api_key=api_key)
+    rows = to_rows(papers)
 
-    new_papers = []
+    df = pd.DataFrame(rows)
+    os.makedirs(os.path.dirname(OUTPUT_CSV), exist_ok=True)
+    df.to_csv(OUTPUT_CSV, index=False)
+    print(f"✅ Saved {len(df)} unique papers to {OUTPUT_CSV}")
 
-    for query in QUERY_VARIANTS:
-        print(f"\n🔎 Running query: {query}")
-        results = search_semantic_scholar(query)
-        filtered = filter_studies(results)
-
-        # Skip papers already in cache (by DOI or title)
-        fresh_papers = [p for p in filtered if p["DOI"] not in existing_dois]
-        print(f"🆕 {len(fresh_papers)} new papers found for query: {query}")
-
-        new_papers.extend(fresh_papers)
-
-    # Apply LLM filtering **only on new papers**
-    for paper in new_papers:
-        print(f"\n📄 Evaluating: {paper['Title']}")
-        result = llm_filter(paper["Title"], paper["Abstract"])
-        print(result)
-        paper["LLM Filter Result"] = result
-
-    # Combine old + new results and save
-    final_results = existing_results + new_papers
-    df = pd.DataFrame(final_results)
-    df.to_csv("semantic_scholar_filtered.csv", index=False)
-    print(f"✅ Saved {len(final_results)} total papers to semantic_scholar_filtered.csv")
 
 if __name__ == "__main__":
     main()
