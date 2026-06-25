@@ -39,7 +39,7 @@ EXCLUDING_AGREED = {
 INCLUDING_AGREED = {
     "has_adults": {"yes"},
     "study_type": {"empirical_with_results", "qualitative_only_study", "case_study"},
-    "intervention_type": {"mobile_app", "web_app", "software_tool", "video_game"},
+    "intervention_type": {"mobile_app", "web_app", "software_tool", "video_game", "neurofeedback"},
     "neurotypes": {"adhd", "autistic", "audhd"},
 }
 # has_under_18 doesn't gate the adults review, so a disagreement on it alone is
