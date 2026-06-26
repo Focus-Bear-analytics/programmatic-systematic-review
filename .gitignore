@@ -25,3 +25,4 @@ search-results-from-database/database-csvs/
 search-results-from-database/_backup_pre_snowball_screen/
 citation-scraping/*.csv
 citation-scraping/*.txt
+search-results-from-database/_archive/
