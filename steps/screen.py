@@ -78,8 +78,13 @@ def _gate(a_res: dict, b_res: dict, require_age: str | None) -> tuple[str, str]:
         ) and (
             str(b_res.get(field, "")).strip().lower() == "no"
         )
+    def both_yes(field: str) -> bool:
+        return (str(a_res.get(field, "")).strip().lower() == "yes"
+                and str(b_res.get(field, "")).strip().lower() == "yes")
     if both_no("is_empirical"):
         return NO, "non_empirical"
+    if both_yes("is_parent_mediated"):
+        return NO, "parent_mediated"
     if require_age and both_no(require_age):
         return NO, "wrong_age"
     return YES, ""

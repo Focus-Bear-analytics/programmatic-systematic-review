@@ -180,10 +180,11 @@ SCREEN_ALLOWED = {
     "has_adults": ["yes", "no", UNSPECIFIED],
     "has_under_18": ["yes", "no", UNSPECIFIED],
     "is_empirical": ["yes", "no", UNSPECIFIED],
+    "is_parent_mediated": ["yes", "no", UNSPECIFIED],
 }
 
 # Order matters: age first, then is_empirical (matches the reasoning order).
-SCREEN_FIELDS = ["has_adults", "has_under_18", "is_empirical"]
+SCREEN_FIELDS = ["has_adults", "has_under_18", "is_empirical", "is_parent_mediated"]
 
 # Detailed fields are only classified for papers that pass the screen.
 DETAIL_FIELDS = [
@@ -231,13 +232,16 @@ Fields (decide in this order):
   "no" (NOT a primary data study) = a literature/systematic/scoping review or meta-analysis (synthesises others' work); an editorial, commentary, opinion, perspective, viewpoint, or letter; a proposal/design/framework/"we present a system" paper that describes a method or tool WITHOUT evaluating it on participants; or a protocol for a study not yet conducted.
   When torn, ask only: did they collect and report their OWN data? Yes -> "yes". Only synthesise, opine, propose, or plan -> "no". Use "{UNSPECIFIED}" only if the abstract gives no indication of the study design at all.
 
+- is_parent_mediated: one of {SCREEN_ALLOWED['is_parent_mediated']}. "yes" if the intervention is delivered TO parents/caregivers/family (or teachers) so they can change a CHILD's outcome — e.g. behavioural parent training, parent-implemented or caregiver-mediated programmes. The adults are the trainees/mediators; the target population is the child. "no" if the intervention is delivered directly to the person with the condition (whether adult or child), or there is no intervention. "{UNSPECIFIED}" if unclear.
+
 WORKED EXAMPLES:
 1) "An 8-week RCT of a CBT app vs waitlist in 60 adults with ADHD; symptoms fell significantly." -> primary data, adults -> has_adults=yes, has_under_18=no, is_empirical=yes.
-2) "We systematically reviewed 32 studies of digital interventions for autistic children." -> a review (no own data); children -> has_adults=no, has_under_18=yes, is_empirical=no.
-3) "This paper proposes a wearable design to support task initiation in adults with ADHD." -> a proposal, not evaluated -> has_adults=yes, has_under_18=no, is_empirical=no.
-4) "Semi-structured interviews with 15 autistic adolescents about school apps." -> qualitative primary study; under 18 -> has_adults=no, has_under_18=yes, is_empirical=yes.
+2) "We systematically reviewed 32 studies of digital interventions for autistic children." -> a review (no own data); children -> has_adults=no, has_under_18=yes, is_empirical=no, is_parent_mediated=no.
+3) "This paper proposes a wearable design to support task initiation in adults with ADHD." -> a proposal, not evaluated -> has_adults=yes, has_under_18=no, is_empirical=no, is_parent_mediated=no.
+4) "Semi-structured interviews with 15 autistic adolescents about school apps." -> qualitative primary study; under 18 -> has_adults=no, has_under_18=yes, is_empirical=yes, is_parent_mediated=no.
+5) "RCT of behavioural parent training for parents of children with ADHD." -> delivered to parents to help the child; subjects are children -> has_adults=no, has_under_18=yes, is_empirical=yes, is_parent_mediated=yes.
 
-Return ONLY a JSON object with exactly these keys: reasoning, has_adults, has_under_18, is_empirical."""
+Return ONLY a JSON object with exactly these keys: reasoning, has_adults, has_under_18, is_empirical, is_parent_mediated."""
 
 
 def coerce_screen(result: dict) -> dict:
