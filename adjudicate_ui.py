@@ -346,6 +346,12 @@ INDEX_HTML = r"""<!doctype html>
   .title { font-size:19px; font-weight:650; margin:2px 0 10px; }
   .abstract { background:var(--card); border:1px solid var(--line); border-radius:10px;
               padding:14px 16px; max-height:320px; overflow:auto; white-space:pre-wrap; color:#cdd6df; }
+  .kw-a { background:rgba(59,130,246,.30); border-radius:3px; }   /* age */
+  .kw-n { background:rgba(168,85,247,.32); border-radius:3px; }   /* neurotype */
+  .kw-i { background:rgba(34,197,94,.30); border-radius:3px; }    /* intervention/digital */
+  .kw-s { background:rgba(245,158,11,.30); border-radius:3px; }   /* study type */
+  .kwleg { font-size:11px; color:var(--mut); margin:6px 0 0; display:flex; gap:12px; flex-wrap:wrap; }
+  .kwleg span { padding:1px 6px; border-radius:3px; }
   table { width:100%; border-collapse:collapse; margin-top:18px; }
   th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
@@ -444,7 +450,8 @@ function render(){
   document.getElementById('main').innerHTML = `
     <div class="meta">${esc(paper.journal)} ${paper.year?('· '+paper.year):''}${doi} · row ${paper.idx} · ${pos+1}/${ORDER.length}</div>
     <div class="title">${esc(paper.title)}</div>
-    <div class="abstract">${esc(paper.abstract)||'<i>no abstract</i>'}</div>
+    <div class="abstract">${paper.abstract?hl(paper.abstract):'<i>no abstract</i>'}</div>
+    <div class="kwleg"><span class="kw-a">age</span><span class="kw-n">neurotype</span><span class="kw-i">intervention</span><span class="kw-s">study type</span></div>
     <table><thead><tr><th>Field</th><th>Rater A</th><th>Rater B</th><th>Your decision</th></tr></thead>
     <tbody>${f}${reasons}</tbody></table>`;
   document.querySelectorAll('.opt').forEach(el=>{
@@ -453,6 +460,20 @@ function render(){
   highlightFocus();
 }
 function esc(s){ return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+// Highlight decision-relevant keywords in the abstract (applied AFTER escaping, so
+// no HTML is broken). Class names (kw-a/n/i/s) deliberately avoid keyword letters
+// so passes don't match inside earlier-inserted spans.
+const KW = [
+  ['kw-a', /\b(adults?|child(?:ren)?|adolescents?|teenagers?|year[- ]olds?|aged?|ages?|mean age|university students?|college students?|undergraduates?|preschool\w*|p[ae]diatric|infants?|toddlers?|young adults?|18 (?:years|and over))\b/gi],
+  ['kw-n', /\b(autis\w*|asd|asperger\w*|adhd|a\.d\.h\.d|attention[- ]deficit|hyperactiv\w*|audhd|neurodiver\w*|autistic)\b/gi],
+  ['kw-i', /\b(mobile app|smartphone\w*|tablet\w*|web[- ]?app\w*|web[- ]based|online program\w*|software|video ?game\w*|serious game\w*|gamif\w*|virtual reality|\bvr\b|augmented reality|\bar\b|wearable\w*|neurofeedback|biofeedback|mindfulness|meditation|cognitive training|\bcbt\b|chatbot\w*|conversational agent|\bapp\b|\bapps\b|digital|computer\w*|telehealth|telecoach\w*|teletherap\w*)\b/gi],
+  ['kw-s', /\b(randomi\w*|\brct\b|controlled trial|clinical trial|pilot|feasibility|case[- ]study|case[- ]report|single[- ]case|qualitative|semi[- ]structured interview\w*|focus group\w*|thematic analysis|systematic review|scoping review|meta[- ]analys\w*|cross[- ]over|pre[- ]post|within[- ]subjects?|participants? (?:were|included)|n\s*=\s*\d+)\b/gi],
+];
+function hl(s){
+  let out = esc(s);
+  for (const [cls, re] of KW) out = out.replace(re, m => `<span class="${cls}">${m}</span>`);
+  return out;
+}
 function pick(fi,val){ paper.fields[fi].current = val; render(); focusField=fi; highlightFocus(); }
 function highlightFocus(){
   document.querySelectorAll('tr[data-row]').forEach(tr=>tr.style.outline='');
