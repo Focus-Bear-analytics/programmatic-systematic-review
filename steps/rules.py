@@ -30,7 +30,11 @@ _ADULT_POP = (
     "adults", "older adults", "elderly", "geriatric",
     "university student", "college student", "undergraduate", "postgraduate",
     "graduate student", "employee", "employees", "workers", "workplace",
-    "workforce", "veterans", "parents", "caregivers", "mothers", "fathers",
+    "workforce", "veterans",
+    # NOTE: "parents"/"caregivers"/"mothers"/"fathers" deliberately NOT here —
+    # in child-treatment studies they're usually informants/raters, not the
+    # studied sample, so they wrongly forced has_adults=yes. Left to the LLM,
+    # which distinguishes a parent SAMPLE (parent_training) from parent raters.
 )
 _MINOR_POP = (
     "infant", "toddler", "preschool", "kindergarten", "child", "children",
