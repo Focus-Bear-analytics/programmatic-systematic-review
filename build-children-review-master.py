@@ -24,11 +24,17 @@ from steps.io import normalize_doi
 BASE = "search-results-from-database/"
 SRC = BASE + "children/adjudicated.csv"
 
-# Digital-intervention inclusion set — identical to the adults review
-# (adjudicate_ui.INCLUDING_AGREED["intervention_type"]) so the two reviews stay
-# comparable. Broaden here if a wider digital net is wanted.
-DIGITAL = {"mobile_app", "web_app", "software_tool", "video_game", "neurofeedback",
-           "cbt", "cognitive_training", "mindfulness", "chatbot", "biofeedback"}
+# Digital-intervention inclusion set. The children review uses the BROAD net:
+# the adults' 10 types PLUS the modalities common in childhood autism/ADHD
+# interventions (VR/AR, video modelling, e-learning, AAC, robotics, wearables,
+# telehealth), PLUS parent_training so parent-/caregiver-mediated DIGITAL
+# programmes surface as candidates (digital delivery confirmed at full text).
+DIGITAL = {
+    "mobile_app", "web_app", "software_tool", "video_game", "neurofeedback",
+    "cbt", "cognitive_training", "mindfulness", "chatbot", "biofeedback",
+    "vr_ar", "video_modeling", "elearning", "aac", "robotics", "wearable",
+    "telecoaching", "telecounselling", "parent_training",
+}
 ND = {"adhd", "autistic", "audhd"}
 
 # Where retrieved full text already lives.

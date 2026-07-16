@@ -28,7 +28,6 @@ sys.path.insert(0, os.getcwd())
 import pandas as pd
 
 from steps.config import load_config, set_active
-from steps.screen import _gate
 from steps.schema import SCREEN_FIELDS
 
 SOURCE = "search-results-from-database/all_papers.csv"
@@ -41,6 +40,18 @@ def nz(v) -> str:
 
 def both_no(a: dict, b: dict, field: str) -> bool:
     return nz(a.get(field)) == "no" and nz(b.get(field)) == "no"
+
+
+def child_gate(a: dict, b: dict) -> tuple[str, str]:
+    """Recall-safe screen for the CHILD review. Unlike steps.screen._gate this
+    does NOT exclude parent-/caregiver-mediated interventions — for an under-18
+    review, parent-implemented digital programmes are in scope (confirmed at
+    full text). Fails only on both-raters-no for is_empirical or has_under_18."""
+    if both_no(a, b, "is_empirical"):
+        return "N", "non_empirical"
+    if both_no(a, b, REQUIRE_AGE):
+        return "N", "wrong_age"
+    return "Y", ""
 
 
 def main() -> None:
@@ -66,7 +77,7 @@ def main() -> None:
         if both_no(a, b, REQUIRE_AGE):
             continue  # both raters agree no under-18 participant -> not a child paper
         keep_rows.append(row)
-        p, why = _gate(a, b, REQUIRE_AGE)
+        p, why = child_gate(a, b)
         passes.append(p)
         reasons.append(why)
 
