@@ -19,9 +19,8 @@
     }
   },
   "screening": {
-    "include_when": {
-      "Final_has_under_18": ["yes"]
-    },
+    "require_age": "has_under_18",
+    "include_when": {},
     "exclude_when": {}
   },
   "aws_profile": "phd",
@@ -49,8 +48,8 @@
     }
   },
   "legacy_column_prefixes": {
-    "a": "Nova",
-    "b": "Sonnet",
+    "a": "RaterA",
+    "b": "RaterB",
     "adjudicator": "Human"
   }
 }
