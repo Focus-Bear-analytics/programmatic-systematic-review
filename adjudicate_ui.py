@@ -47,6 +47,51 @@ HUMAN = "human"
 # Show every disagreement (ADJ_UI_ALL=1) instead of only decision-relevant ones.
 SHOW_ALL = os.getenv("ADJ_UI_ALL", "0") not in ("0", "", "false", "False")
 
+# --- Blind validation mode (ADJ_VALIDATE=1) -------------------------------
+# Instead of adjudicating disagreements, draw a random sample of the corpus and
+# present each paper BLIND (no AI labels shown) so the human screens it from
+# scratch. Human labels are written to Validate_<field> in a separate sample file;
+# a later script compares them against the AI consensus to estimate screening
+# accuracy (sensitivity/specificity/κ). The sample is fixed (seeded) and resumable.
+VALIDATE = os.getenv("ADJ_VALIDATE", "0") not in ("0", "", "false", "False")
+VALIDATE_FRACTION = float(os.getenv("VALIDATE_FRACTION", "0.05"))
+VALIDATE_SEED = int(os.getenv("VALIDATE_SEED", "42"))
+VALIDATE_SOURCE = os.getenv("VALIDATE_SOURCE", "search-results-from-database/all_papers.csv")
+VALIDATE_OUT = os.getenv("VALIDATE_OUT", "search-results-from-database/validation_sample.csv")
+VALIDATED_COL = "Validated"
+# Enriched (stratified) validation: instead of a flat 5% random draw — dominated by
+# confident excludes and near-blind to recall — sample three strata so the human sees
+# every screen-KEEP plus an oversample of the borderline zone where false-negatives hide.
+# validation-accuracy.py weights each stratum back to the population for unbiased rates.
+VALIDATE_ENRICHED = os.getenv("VALIDATE_ENRICHED", "0") not in ("0", "", "false", "False")
+VALIDATE_N_KEEP = int(os.getenv("VALIDATE_N_KEEP", "0"))       # 0 = take ALL screen-KEEP papers
+VALIDATE_N_BORDER = int(os.getenv("VALIDATE_N_BORDER", "220"))  # AI-exclude but disagreement/unspecified
+VALIDATE_N_EXCL = int(os.getenv("VALIDATE_N_EXCL", "140"))      # confident excludes (bounds FN in the mass)
+# Screen-decision vocab — MUST mirror validation-accuracy.py so strata match the metric.
+_V_DIGITAL = {"mobile_app", "web_app", "software_tool", "video_game", "neurofeedback", "cbt",
+              "cognitive_training", "mindfulness", "chatbot", "biofeedback"}
+_V_EMPIRICAL = {"empirical_with_results", "qualitative_only_study", "case_study"}
+_V_ND = {"adhd", "autistic", "audhd"}
+_V_GATE = ["has_adults", "study_type", "intervention_type", "neurotypes"]
+# Include-compatible values per screen field (mirrors passes() in validation-accuracy.py).
+# In blind validation, picking a concrete value OUTSIDE these sets (and not "unspecified",
+# which is recall-safe/kept) is a decisive exclude → skip the remaining fields and advance.
+_V_INCLUDE = {
+    "has_adults": {"yes"},
+    "study_type": _V_EMPIRICAL,
+    "intervention_type": _V_DIGITAL,
+    "neurotypes": _V_ND,
+}
+
+# --- Intent-disagreement adjudication mode (ADJ_INTENT=1) ------------------
+# Resolve the rows where the two raters disagreed on intervention INTENT
+# (normalisation vs skills_training vs accommodation_support). Shows both raters' picks (this is
+# adjudication, not blind validation) and writes intent_final/intent_human.
+ADJ_INTENT = os.getenv("ADJ_INTENT", "0") not in ("0", "", "false", "False")
+INTENT_SRC = os.getenv("INTENT_SRC", "search-results-from-database/nd_digital_adults_intent.csv")
+INTENT_ALLOWED = ["normalisation", "skills_training", "accommodation_support", "unclear"]
+INTENT_ADJ_COL = "intent_adjudicated"
+
 # A consensus field for which BOTH raters pick an excluding value — NOT necessarily
 # the SAME one. If both raters agree the paper is excluded on a criterion (e.g. one
 # says telecoaching and the other telecounselling — both are out; or one says review
@@ -167,7 +212,115 @@ class State:
         inc = INCLUDING_AGREED.get(f, set())
         return av in inc and bv in inc
 
+    @staticmethod
+    def _ai_label(row, f: str) -> str:
+        c = str(row.get(f"Consensus_{f}", "")).strip().lower()
+        return c if c else str(row.get(f"RaterB_{f}", "")).strip().lower()
+
+    def _enriched_sample(self, elig):
+        """Stratified validation draw: all screen-KEEP + oversampled BORDER + a
+        bounded EXCL sample. Tags each row with its stratum and population weight so
+        validation-accuracy.py can produce unbiased population sensitivity/specificity."""
+        def passes(r):
+            return (self._ai_label(r, "neurotypes") in _V_ND
+                    and self._ai_label(r, "has_adults") in ("yes", "unspecified")
+                    and self._ai_label(r, "intervention_type") in _V_DIGITAL
+                    and self._ai_label(r, "study_type") in _V_EMPIRICAL)
+        def borderline(r):
+            dis = any(str(r.get(f"RaterA_{f}", "")).strip().lower()
+                      != str(r.get(f"RaterB_{f}", "")).strip().lower() for f in _V_GATE)
+            uns = any("unspec" in self._ai_label(r, f) for f in _V_GATE)
+            return dis or uns
+        p = elig.apply(passes, axis=1)
+        b = elig.apply(borderline, axis=1)
+        strata = {
+            "keep": elig[p],
+            "border": elig[(~p) & b],
+            "excl": elig[(~p) & (~b)],
+        }
+        want = {"keep": VALIDATE_N_KEEP or len(strata["keep"]),
+                "border": VALIDATE_N_BORDER, "excl": VALIDATE_N_EXCL}
+        parts = []
+        for name, sub in strata.items():
+            k = min(want[name], len(sub))
+            s = sub if k >= len(sub) else sub.sample(n=k, random_state=VALIDATE_SEED)
+            s = s.copy()
+            s["Validate_stratum"] = name
+            s["Validate_stratum_pop"] = str(len(sub))   # population size of the stratum
+            s["Validate_stratum_n"] = str(k)            # number sampled from it
+            parts.append(s)
+        df = pd.concat(parts)
+        # Interleave strata so the human isn't screening one block at a time (which
+        # would bias fatigue/anchoring by stratum).
+        df = df.sample(frac=1, random_state=VALIDATE_SEED).reset_index(drop=True)
+        breakdown = ", ".join(f"{n}={min(want[n], len(strata[n]))}/{len(strata[n])}" for n in ("keep", "border", "excl"))
+        return df, f"{VALIDATE_SOURCE} (ENRICHED stratified: {breakdown}; seed {VALIDATE_SEED})"
+
+    def _load_validate(self) -> None:
+        """Draw (or resume) a fixed random sample and queue it for blind screening."""
+        if os.path.exists(VALIDATE_OUT):
+            df = pd.read_csv(VALIDATE_OUT, dtype=str).fillna("")
+            src = VALIDATE_OUT
+        else:
+            full = pd.read_csv(VALIDATE_SOURCE, dtype=str).fillna("")
+            # eligible to validate: not a duplicate, has a usable abstract
+            elig = full[
+                (full.get(DUPLICATE_COL, "").astype(str).str.upper() != YES)
+                & (~full[COL_ABSTRACT].apply(is_missing_abstract))
+            ].copy()
+            if VALIDATE_ENRICHED:
+                df, src = self._enriched_sample(elig)
+            else:
+                n = max(1, round(len(elig) * VALIDATE_FRACTION))
+                df = elig.sample(n=n, random_state=VALIDATE_SEED).reset_index(drop=True)
+                src = f"{VALIDATE_SOURCE} (sampled {n}/{len(elig)} @ {VALIDATE_FRACTION:.0%}, seed {VALIDATE_SEED})"
+        self._resolve_prefixes(df)
+        for f in CONSENSUS_FIELDS:
+            if f"Validate_{f}" not in df.columns:
+                df[f"Validate_{f}"] = ""
+        if VALIDATED_COL not in df.columns:
+            df[VALIDATED_COL] = ""
+        df = df.astype({c: object for c in df.columns
+                        if c.startswith("Validate_") or c == VALIDATED_COL})
+        self.df = df
+        self.queue = [i for i in df.index if self._nz(df.at[i, VALIDATED_COL]) != HUMAN]
+        self.queue_all = list(df.index)
+        self.queue_relevant = self.queue
+        self.agreed = 0
+        self.skipped_dead = 0
+        if not os.path.exists(VALIDATE_OUT):
+            self._save_df()  # persist the sample so it's fixed across restarts
+        print(f"[{self.slug}] BLIND VALIDATION: {len(df)} sampled papers | "
+              f"{len(self.queue)} to screen | source: {src}", flush=True)
+
+    def _load_intent(self) -> None:
+        """Queue the intent-coding disagreements for human adjudication."""
+        df = pd.read_csv(INTENT_SRC, dtype=str).fillna("")
+        for c in ("intent_final", "intent_human", INTENT_ADJ_COL, "intent_has_adults"):
+            if c not in df.columns:
+                df[c] = ""
+        df = df.astype({c: object for c in ("intent_final", "intent_human", INTENT_ADJ_COL, "intent_has_adults")})
+        self.df = df
+        self.queue_fields = ["intent"]
+        self.queue = [i for i in df.index
+                      if self._nz(df.at[i, "intent_consensus"]) == "disagree"
+                      and self._nz(df.at[i, INTENT_ADJ_COL]) != HUMAN]
+        self.queue_all = self.queue
+        self.queue_relevant = self.queue
+        self.agreed = int((df["intent_consensus"].astype(str).str.lower() != "disagree").sum())
+        self.skipped_dead = 0
+        print(f"[{self.slug}] INTENT ADJUDICATION: {len(df)} studies | "
+              f"{len(self.queue)} disagreements to resolve | {self.agreed} already agreed", flush=True)
+
     def _load(self) -> None:
+        if ADJ_INTENT:
+            self.out_path = INTENT_SRC
+            self._load_intent()
+            return
+        if VALIDATE:
+            self.out_path = VALIDATE_OUT
+            self._load_validate()
+            return
         # Resume from adjudicated.csv if present, else start from enriched.csv.
         if os.path.exists(self.out_path):
             df = pd.read_csv(self.out_path, dtype=str).fillna("")
@@ -251,6 +404,31 @@ class State:
 
     def save_decision(self, idx: int, decisions: dict) -> None:
         with _lock:
+            if ADJ_INTENT:
+                adults = str(decisions.get("adults", "yes")).strip().lower()
+                self.df.at[idx, "intent_has_adults"] = adults
+                if adults == "no":
+                    # Human ground-truth: not an adult-population study. Exclude from
+                    # the intent analysis and drop it from the queue (no intent needed).
+                    self.df.at[idx, "intent_final"] = "excluded_not_adults"
+                    self.df.at[idx, "intent_human"] = ""
+                    self.df.at[idx, INTENT_ADJ_COL] = HUMAN
+                    self._save_df()
+                    return
+                val = decisions.get("intent")
+                if val:
+                    self.df.at[idx, "intent_final"] = val
+                    self.df.at[idx, "intent_human"] = val
+                self.df.at[idx, INTENT_ADJ_COL] = HUMAN
+                self._save_df()
+                return
+            if VALIDATE:
+                for f in CONSENSUS_FIELDS:
+                    if f in decisions:
+                        self.df.at[idx, f"Validate_{f}"] = decisions[f]
+                self.df.at[idx, VALIDATED_COL] = HUMAN
+                self._save_df()
+                return
             for f in CONSENSUS_FIELDS:
                 if f in decisions:
                     val = decisions[f]
@@ -262,15 +440,16 @@ class State:
     # --- view models -------------------------------------------------------
 
     def progress(self) -> dict:
-        resolved = int(
-            (self.df[ADJUDICATED_COL].astype(str).str.lower() == HUMAN).sum()
-        )
-        remaining = [i for i in self.queue if self._nz(self.df.at[i, ADJUDICATED_COL]) != HUMAN]
+        status_col = INTENT_ADJ_COL if ADJ_INTENT else (VALIDATED_COL if VALIDATE else ADJUDICATED_COL)
+        resolved = int((self.df[status_col].astype(str).str.lower() == HUMAN).sum())
+        remaining = [i for i in self.queue if self._nz(self.df.at[i, status_col]) != HUMAN]
+        allowed = {f: (INTENT_ALLOWED if f == "intent" else ALLOWED[f]) for f in self.queue_fields}
         return {
             "slug": self.slug,
-            "a_label": self.a_label,
-            "b_label": self.b_label,
-            "mode": "all" if SHOW_ALL else "decision-relevant",
+            "blind": VALIDATE,
+            "a_label": "Rater A" if ADJ_INTENT else self.a_label,
+            "b_label": "Rater B" if ADJ_INTENT else self.b_label,
+            "mode": "intent-adjudication" if ADJ_INTENT else ("blind-validation" if VALIDATE else ("all" if SHOW_ALL else "decision-relevant")),
             "total_disagreements": len(self.queue),
             "total_all": len(getattr(self, "queue_all", self.queue)),
             "total_relevant": len(getattr(self, "queue_relevant", self.queue)),
@@ -281,13 +460,61 @@ class State:
             "queue": [int(i) for i in self.queue],
             "remaining_idxs": [int(i) for i in remaining],
             "fields": self.queue_fields,
-            "allowed": {f: ALLOWED[f] for f in self.queue_fields},
+            "allowed": allowed,
         }
 
     def paper(self, idx: int) -> dict:
         row = self.df.loc[idx]
+        if ADJ_INTENT:
+            det = str(row.get("Consensus_intervention_details") or row.get("RaterB_intervention_details") or "").strip()
+            abstract = (f"INTERVENTION: {det}\n\n{row.get(COL_ABSTRACT, '')}" if det
+                        else str(row.get(COL_ABSTRACT, "")))
+            ra_ad = str(row.get("RaterA_has_adults", "")).strip()
+            rb_ad = str(row.get("RaterB_has_adults", "")).strip()
+            adults_cur = str(row.get("intent_has_adults", "")).strip() or "yes"
+            return {
+                "idx": int(idx),
+                "title": str(row.get(COL_TITLE, "")),
+                "abstract": abstract,
+                "doi": str(row.get("DOI", "")),
+                "journal": str(row.get("Journal", "")),
+                "year": str(row.get("Year", "")),
+                "a_reason": "", "b_reason": "",
+                "resolved": self._nz(row.get(INTENT_ADJ_COL, "")) == HUMAN,
+                "fields": [
+                    {
+                        # Age gate: press "no" to exclude a non-adult study and auto-skip.
+                        "name": "adults",
+                        "a": ra_ad, "b": rb_ad,
+                        "agree": ra_ad.lower() == rb_ad.lower(),
+                        "allowed": ["yes", "no"],
+                        "current": adults_cur,
+                    },
+                    {
+                        "name": "intent",
+                        "a": str(row.get("intent_raterA", "")).strip(),
+                        "b": str(row.get("intent_raterB", "")).strip(),
+                        "agree": False,
+                        "allowed": INTENT_ALLOWED,
+                        "current": str(row.get("intent_final", "")).strip(),
+                    },
+                ],
+            }
         fields = []
         for f in self.queue_fields:
+            if VALIDATE:
+                # Blind: never expose the AI labels; the human chooses from scratch.
+                inc = _V_INCLUDE.get(f)
+                exclude = ([v for v in ALLOWED[f]
+                            if str(v).strip().lower() not in inc and str(v).strip().lower() != "unspecified"]
+                           if inc else [])
+                fields.append({
+                    "name": f, "a": "", "b": "", "agree": False,
+                    "allowed": ALLOWED[f],
+                    "exclude": exclude,
+                    "current": str(row.get(f"Validate_{f}", "")).strip(),
+                })
+                continue
             a = str(row.get(f"{self.a_pref}_{f}", "")).strip()
             b = str(row.get(f"{self.b_pref}_{f}", "")).strip()
             cur = str(row.get(f"Final_{f}", "")).strip() or str(row.get(f"Human_{f}", "")).strip()
@@ -304,9 +531,9 @@ class State:
                 "allowed": ALLOWED[f],
                 "current": cur,
             })
-        # Show rater reasoning if present (helps the human decide).
-        a_reason = str(row.get(f"{self.a_pref}_reasoning", "")).strip()
-        b_reason = str(row.get(f"{self.b_pref}_reasoning", "")).strip()
+        # Show rater reasoning if present (helps the human decide) — never in blind mode.
+        a_reason = "" if VALIDATE else str(row.get(f"{self.a_pref}_reasoning", "")).strip()
+        b_reason = "" if VALIDATE else str(row.get(f"{self.b_pref}_reasoning", "")).strip()
         return {
             "idx": int(idx),
             "title": str(row.get(COL_TITLE, "")),
@@ -316,7 +543,7 @@ class State:
             "year": str(row.get("Year", "")),
             "a_reason": a_reason,
             "b_reason": b_reason,
-            "resolved": self._nz(row.get(ADJUDICATED_COL, "")) == HUMAN,
+            "resolved": self._nz(row.get(VALIDATED_COL if VALIDATE else ADJUDICATED_COL, "")) == HUMAN,
             "fields": fields,
         }
 
@@ -404,6 +631,7 @@ let META=null, ORDER=[], pos=0, paper=null, focusField=0;
 
 async function boot(){
   META = await (await fetch('/api/meta')).json();
+  if(META.blind){ const h=document.querySelector('header h1'); if(h) h.textContent='Blind validation · '+META.slug; }
   ORDER = META.remaining_idxs.length ? META.remaining_idxs : META.queue;
   if(!ORDER.length){ renderDone(); updateProg(); return; }
   pos = 0; await load(); updateProg();
@@ -427,13 +655,18 @@ async function load(){
 }
 function render(){
   if(!paper){ renderDone(); return; }
+  const blind = META.blind;
   const f = paper.fields.map((fd,i)=>{
     const opts = fd.allowed.map((v,j)=>{
       const sel = (fd.current||'').toLowerCase()===v.toLowerCase() ? ' sel':'';
       return `<span class="opt${sel}" data-field="${i}" data-val="${v}"><span class="k">${j+1}</span>${v}</span>`;
     }).join('');
-    const aMatch = fd.a.toLowerCase()===(fd.current||'').toLowerCase();
-    const bMatch = fd.b.toLowerCase()===(fd.current||'').toLowerCase();
+    if(blind){
+      return `<tr data-row="${i}">
+        <td class="fname">${fd.name}</td>
+        <td><div class="opts">${opts}</div></td>
+      </tr>`;
+    }
     const diff = fd.agree?'':' diff';
     return `<tr class="${fd.agree?'agree':'disagree'}" data-row="${i}">
       <td class="fname">${fd.name}${fd.agree?'':'<span class="badge">DISAGREEMENT</span>'}</td>
@@ -442,17 +675,19 @@ function render(){
       <td><div class="opts">${opts}</div></td>
     </tr>`;
   }).join('');
-  const reasons = (paper.a_reason||paper.b_reason) ? `
+  const reasons = (!blind && (paper.a_reason||paper.b_reason)) ? `
      <tr><td></td>
        <td colspan="1"><div class="reason">${esc(paper.a_reason)}</div></td>
        <td colspan="2"><div class="reason">${esc(paper.b_reason)}</div></td></tr>`:'';
   const doi = paper.doi ? ` · <a href="https://doi.org/${paper.doi}" target="_blank">${paper.doi}</a>`:'';
+  const thead = blind ? '<tr><th>Field</th><th>Your decision</th></tr>'
+                      : '<tr><th>Field</th><th>Rater A</th><th>Rater B</th><th>Your decision</th></tr>';
   document.getElementById('main').innerHTML = `
     <div class="meta">${esc(paper.journal)} ${paper.year?('· '+paper.year):''}${doi} · row ${paper.idx} · ${pos+1}/${ORDER.length}</div>
     <div class="title">${esc(paper.title)}</div>
     <div class="abstract">${paper.abstract?hl(paper.abstract):'<i>no abstract</i>'}</div>
     <div class="kwleg"><span class="kw-a">age</span><span class="kw-n">neurotype</span><span class="kw-i">intervention</span><span class="kw-s">study type</span></div>
-    <table><thead><tr><th>Field</th><th>Rater A</th><th>Rater B</th><th>Your decision</th></tr></thead>
+    <table><thead>${thead}</thead>
     <tbody>${f}${reasons}</tbody></table>`;
   document.querySelectorAll('.opt').forEach(el=>{
     el.onclick=()=>{ pick(+el.dataset.field, el.dataset.val); };
@@ -474,7 +709,20 @@ function hl(s){
   for (const [cls, re] of KW) out = out.replace(re, m => `<span class="${cls}">${m}</span>`);
   return out;
 }
-function pick(fi,val){ paper.fields[fi].current = val; render(); focusField=fi; highlightFocus(); }
+function pick(fi,val){
+  paper.fields[fi].current = val;
+  // Age gate (intent mode): "no" on the adults field excludes the study and jumps on.
+  if(paper.fields[fi].name==='adults' && val==='no'){ doSave({adults:'no'}); return; }
+  // Blind validation: a decisive-exclude value (children / non-empirical / non-ND /
+  // non-digital) means the paper is out regardless of the other fields — record what's
+  // been answered so far (incl. this pick) and skip straight to the next paper.
+  const fd=paper.fields[fi];
+  if(META.blind && fd.exclude && fd.exclude.some(x=>x.toLowerCase()===String(val).toLowerCase())){
+    const decisions={}; paper.fields.forEach(f=>{ if(f.current) decisions[f.name]=f.current; });
+    doSave(decisions); return;
+  }
+  render(); focusField=fi; highlightFocus();
+}
 function highlightFocus(){
   document.querySelectorAll('tr[data-row]').forEach(tr=>tr.style.outline='');
   const tr=document.querySelector(`tr[data-row="${focusField}"]`);
@@ -483,10 +731,7 @@ function highlightFocus(){
   document.getElementById('fieldhint').textContent = fd ? `focused: ${fd.name} — press a/b or 1-${fd.allowed.length}` : '';
 }
 function allResolved(){ return paper.fields.every(fd=>fd.current && fd.current.length); }
-async function save(){
-  if(!paper) return;
-  if(!allResolved()){ alert('Pick a value for every field first.'); return; }
-  const decisions={}; paper.fields.forEach(fd=>decisions[fd.name]=fd.current);
+async function doSave(decisions){
   await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({idx:paper.idx, decisions})});
   META.resolved++;
@@ -497,11 +742,20 @@ async function save(){
   await load();
   window.scrollTo({top:0, behavior:'smooth'});
 }
+async function save(){
+  if(!paper) return;
+  if(!allResolved()){ alert('Pick a value for every field first.'); return; }
+  const decisions={}; paper.fields.forEach(fd=>decisions[fd.name]=fd.current);
+  await doSave(decisions);
+}
 function renderDone(){
-  document.getElementById('main').innerHTML =
-    `<div class="done"><h2>✓ All disagreements adjudicated</h2>
-     <p>${META.resolved} resolved by you · ${META.agreed} auto-agreed by the two raters.</p>
-     <p>Final labels written to <code>${META.slug}</code> adjudicated.csv.</p></div>`;
+  document.getElementById('main').innerHTML = META.blind
+    ? `<div class="done"><h2>✓ Blind validation complete</h2>
+       <p>${META.resolved} papers screened from scratch.</p>
+       <p>Your labels written to <code>validation_sample.csv</code> (Validate_* columns). Run the accuracy comparison script next.</p></div>`
+    : `<div class="done"><h2>✓ All disagreements adjudicated</h2>
+       <p>${META.resolved} resolved by you · ${META.agreed} auto-agreed by the two raters.</p>
+       <p>Final labels written to <code>${META.slug}</code> adjudicated.csv.</p></div>`;
   document.getElementById('fieldhint').textContent='';
 }
 document.getElementById('save').onclick=save;
@@ -513,8 +767,8 @@ document.addEventListener('keydown',e=>{
   else if(e.key===']'){ if(pos<ORDER.length-1){pos++; load();} }
   else if(e.key==='['){ if(pos>0){pos--; load();} }
   else if(e.key==='Tab'){ e.preventDefault(); focusField=(focusField+1)%paper.fields.length; highlightFocus(); }
-  else if(e.key==='a'||e.key==='A'){ pick(focusField, paper.fields[focusField].a); }
-  else if(e.key==='b'||e.key==='B'){ pick(focusField, paper.fields[focusField].b); }
+  else if((e.key==='a'||e.key==='A') && !META.blind){ pick(focusField, paper.fields[focusField].a); }
+  else if((e.key==='b'||e.key==='B') && !META.blind){ pick(focusField, paper.fields[focusField].b); }
   else if(/^[1-9]$/.test(e.key)){ const fd=paper.fields[focusField]; const v=fd.allowed[+e.key-1]; if(v) pick(focusField, v); }
 });
 boot();

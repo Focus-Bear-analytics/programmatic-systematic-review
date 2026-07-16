@@ -9,6 +9,7 @@ __pycache__/
 # extracted publisher full text (copyrighted) — never commit
 full_text/
 full_text_snowball/
+manual_fulltext/
 
 # local secrets / backups / editor lock files
 *.bak-deadkey
