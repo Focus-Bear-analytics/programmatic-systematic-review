@@ -21,6 +21,7 @@ manual_fulltext/
 # large derived datasets — regenerable from the pipeline; kept out of git
 search-results-from-database/*.csv
 search-results-from-database/combined/
+search-results-from-database/children/
 search-results-from-database/snowball/
 search-results-from-database/database-csvs/
 search-results-from-database/_backup_pre_snowball_screen/

@@ -10,7 +10,7 @@
   "inputs": {
     "carry_forward": {
       "from_config": "adults",
-      "csv": "adjudicated.csv",
+      "csv": "combined/adjudicated.csv",
       "filter": {
         "column": "Final_has_under_18",
         "value": "yes"
