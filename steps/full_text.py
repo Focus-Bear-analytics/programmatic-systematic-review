@@ -191,6 +191,78 @@ def fetch_elsevier_fulltext(doi: str, api_key: str | None = None) -> str | None:
     return text if len(text) >= MIN_FULL_TEXT_CHARS else None
 
 
+def _url_to_text(url: str | None) -> str | None:
+    """Download an OA URL and extract text (PDF or HTML landing)."""
+    if not url:
+        return None
+    try:
+        resp = SESSION.get(url, headers=_BROWSER, timeout=90, allow_redirects=True)
+    except requests.RequestException:
+        return None
+    if resp.status_code != 200 or not resp.content:
+        return None
+    ctype = resp.headers.get("Content-Type", "").lower()
+    text = _pdf_to_text(resp.content) if ("pdf" in ctype or url.lower().endswith(".pdf")) \
+        else _html_to_text(resp.text)
+    return text or None
+
+
+S2_PAPER = "https://api.semanticscholar.org/graph/v1/paper"
+
+
+def fetch_s2_fulltext(doi: str | None, pmid: str | None) -> str | None:
+    """Semantic Scholar openAccessPdf — often a repository/preprint copy Unpaywall
+    lacks. Keyless (the project's S2 key is dead); tolerant of rate limits."""
+    ident = f"DOI:{doi}" if doi else (f"PMID:{pmid}" if pmid else None)
+    if not ident:
+        return None
+    try:
+        r = SESSION.get(f"{S2_PAPER}/{ident}", params={"fields": "openAccessPdf"}, timeout=60)
+    except requests.RequestException:
+        return None
+    if r.status_code != 200:
+        return None
+    try:
+        oa = (r.json() or {}).get("openAccessPdf") or {}
+    except ValueError:
+        return None
+    return _url_to_text(oa.get("url"))
+
+
+OPENALEX_WORK = "https://api.openalex.org/works"
+
+
+def fetch_openalex_fulltext(doi: str | None, email: str | None) -> str | None:
+    """OpenAlex OA locations — aggregates repository/publisher OA PDFs, sometimes
+    catching copies Unpaywall's best_oa_location misses."""
+    if not doi:
+        return None
+    params = {"mailto": email} if email else {}
+    try:
+        r = SESSION.get(f"{OPENALEX_WORK}/doi:{doi}", params=params, timeout=60)
+    except requests.RequestException:
+        return None
+    if r.status_code != 200:
+        return None
+    try:
+        w = r.json() or {}
+    except ValueError:
+        return None
+    seen: set[str] = set()
+    locs = [w.get("best_oa_location"), w.get("primary_location"), *(w.get("locations") or [])]
+    for loc in locs:
+        if not loc:
+            continue
+        url = loc.get("pdf_url") or (loc.get("is_oa") and loc.get("landing_page_url"))
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        text = _url_to_text(url)
+        if text:
+            return text
+    return None
+
+
 def fetch_open_full_text(doi: str | None, pmid: str | None, email: str | None) -> Tuple[str | None, str]:
     """Try the free OA sources in order. Returns (text|None, source_label)."""
     if doi or pmid:
@@ -201,4 +273,12 @@ def fetch_open_full_text(doi: str | None, pmid: str | None, email: str | None) -
         text = fetch_unpaywall_fulltext(doi, email)
         if text:
             return text, "unpaywall"
+    if doi or pmid:
+        text = fetch_s2_fulltext(doi, pmid)
+        if text:
+            return text, "semantic_scholar"
+    if doi:
+        text = fetch_openalex_fulltext(doi, email)
+        if text:
+            return text, "openalex"
     return None, "none"
