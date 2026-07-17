@@ -11,10 +11,11 @@ Tiers (over ft_status=need only):
   1 STRONG   — both raters: digital intervention + ND + empirical study type.
   2 MODERATE — empirical-plausible but one-sided on some dimension.
   3 DROP     — both raters call it non-empirical.
+  4 DROP     — abstract clearly reports N < 20 (recall-safe: unstated N is KEPT).
 
 Outputs:
   children/fulltext_to_retrieve_priority.csv — Tier 1 then Tier 2, ranked.
-  children/fulltext_triage_dropped.csv       — Tier 3 (both-rater non-empirical).
+  children/fulltext_triage_dropped.csv       — Tiers 3-4 (non-empirical / underpowered).
 """
 import os
 import sys
@@ -34,6 +35,7 @@ DIGITAL = {"mobile_app", "web_app", "software_tool", "video_game", "neurofeedbac
 ND = {"adhd", "autistic", "audhd"}
 EMPIRICAL = {"empirical_with_results", "qualitative_only_study", "case_study"}
 NON_EMPIRICAL = {"review", "commentary", "proposal", "protocol"}
+MIN_N = 20  # studies clearly reporting fewer enrolled participants are set aside
 
 SNOWBALL_TXT, DB_TXT, MANUAL_PDF = "full_text_snowball", "full_text", "manual_fulltext"
 
@@ -88,8 +90,15 @@ def main() -> None:
         nd = rater_agreement(r, "neurotypes", ND)
         emp = rater_agreement(r, "study_type", EMPIRICAL)
         nonemp = rater_agreement(r, "study_type", NON_EMPIRICAL)
+        try:
+            n = int(str(r.get("n_total", "")).strip())
+        except ValueError:
+            n = None
+        underpowered = n is not None and n < MIN_N
         if nonemp == 2:
             tier = 3
+        elif underpowered:
+            tier = 4  # abstract clearly reports < MIN_N participants
         elif dig == 2 and nd == 2 and emp == 2:
             tier = 1
         else:
@@ -102,17 +111,19 @@ def main() -> None:
             "study_type": pick(r, "study_type"),
             "intervention_type": pick(r, "intervention_type"),
             "neurotypes": pick(r, "neurotypes"),
+            "n_total": r.get("n_total", ""),
             "dig_agree": dig, "nd_agree": nd, "emp_agree": emp,
             "save_as": (fid(r.get("DOI", "")) + ".pdf") if fid(r.get("DOI", "")) else f"PMID{r.get('PMID','')}.pdf",
             "URL": r.get("URL", ""),
         })
 
     t = pd.DataFrame(rows)
-    n = {i: int((t.tier == i).sum()) for i in (1, 2, 3)}
+    n = {i: int((t.tier == i).sum()) for i in (1, 2, 3, 4)}
     print(f"still-missing candidates: {len(t)}")
     print(f"  Tier 1 STRONG   (both digital + both ND + both empirical): {n[1]}")
     print(f"  Tier 2 MODERATE (empirical-plausible, one-sided somewhere): {n[2]}")
     print(f"  Tier 3 DROP     (both raters non-empirical):                {n[3]}")
+    print(f"  Tier 4 DROP     (abstract clearly reports N < {MIN_N}):          {n[4]}")
 
     priority = t[t.tier <= 2].sort_values(["tier", "score", "neurotypes"], ascending=[True, False, True])
     out1 = BASE + "children/fulltext_to_retrieve_priority.csv"
@@ -120,10 +131,10 @@ def main() -> None:
     print(f"\n{out1}: {len(priority)} papers worth retrieving ({n[1]} strong + {n[2]} moderate)")
     print("  priority by neurotype:", dict(priority.neurotypes.value_counts().head(6)))
 
-    dropped = t[t.tier == 3].sort_values("neurotypes")
+    dropped = t[t.tier >= 3].sort_values(["tier", "neurotypes"])
     out2 = BASE + "children/fulltext_triage_dropped.csv"
     dropped.drop(columns=["score"]).to_csv(out2, index=False)
-    print(f"{out2}: {len(dropped)} non-empirical rows set aside")
+    print(f"{out2}: {len(dropped)} set aside ({n[3]} non-empirical + {n[4]} underpowered N<{MIN_N})")
 
 
 if __name__ == "__main__":
