@@ -9,7 +9,9 @@ import pandas as pd
 from steps.full_text import fetch_open_full_text, fetch_elsevier_fulltext
 from steps.io import normalize_doi
 
-CSV = "search-results-from-database/fulltext_to_retrieve.csv"
+# CSV path overridable so the same OA retrieval runs for either review's
+# fulltext_to_retrieve.csv (adults default; pass children/… as argv[1]).
+CSV = sys.argv[1] if len(sys.argv) > 1 else "search-results-from-database/fulltext_to_retrieve.csv"
 TEXT_DIR = "full_text_snowball"
 ELS = ("10.1016", "10.1006", "10.1053", "10.1067", "10.1078")
 os.makedirs(TEXT_DIR, exist_ok=True)
