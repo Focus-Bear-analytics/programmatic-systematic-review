@@ -1,0 +1,47 @@
+{
+  "name": "Adults — digital interventions for ADHD/autism",
+  "slug": "adults",
+  "description": "Original review: digital interventions in adults with ADHD and/or autism.",
+  "paths": {
+    "data_dir": "search-results-from-database",
+    "review_subdir": "",
+    "database_csvs_subdir": "database-csvs"
+  },
+  "inputs": {
+    "carry_forward": null
+  },
+  "screening": {
+    "require_age": "has_adults",
+    "include_when": {},
+    "exclude_when": {}
+  },
+  "aws_profile": "phd",
+  "raters": {
+    "a": {
+      "provider": "bedrock",
+      "model_id": "us.amazon.nova-2-lite-v1:0",
+      "label": "Nova 2 Lite",
+      "region": "us-east-1",
+      "prompt_suffix": "RATER NOTES — apply these strictly; they are your most common mistakes:\n1. has_adults: parents, carers, teachers, clinicians, university/college students, employees, military, and any general-adult or unspecified-age clinical sample COUNT AS ADULTS (has_adults=yes, has_under_18=no). A sample described only as 'people/individuals/adults with autism/ADHD' with no under-18 cue is has_adults=yes. Reserve 'unspecified' only when there is NO age or population cue at all. A study of children PLUS their parents is BOTH (has_adults=yes and has_under_18=yes).\n2. neurotypes: assign adhd / autistic / audhd ONLY when the studied SAMPLE is formally diagnosed with or selected for it. Broad populations — 'mental health conditions', 'disabilities', 'ADHD-spectrum problems', mood disorders, or a general/mixed clinical group — are neither_adhd_nor_autistic. Never infer autism/ADHD just because the paper is ABOUT, set in, or mentions those fields.\n3. study_type: any study reporting numeric/statistical/mixed results is empirical_with_results, even small pilot/acceptability/feasibility studies — do NOT call these qualitative_only_study (reserve that for interview/thematic studies with NO quantitative result). A paper that only PROPOSES or DESIGNS a system/tool without evaluating it is proposal; a single/very-small-N report is case_study; an opinion/editorial/perspective is commentary.\n4. intervention_type: a technology used ONLY to assess, measure, monitor, detect, or screen (e.g. a continuous-performance test, a signal-quality tool, a diagnostic classifier) is no_intervention — NOT a software type. But when an intervention IS actually delivered and is clearly digital, commit to the specific type (mobile_app / web_app / software_tool) rather than 'unspecified'."
+    },
+    "b": {
+      "provider": "bedrock",
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "label": "Claude Sonnet 4.6",
+      "region": "us-east-1",
+      "prompt_suffix": ""
+    },
+    "adjudicator": {
+      "provider": "human",
+      "model_id": "human",
+      "label": "Human (manual adjudication)",
+      "region": "",
+      "prompt_suffix": ""
+    }
+  },
+  "legacy_column_prefixes": {
+    "a": "Nova",
+    "b": "Sonnet",
+    "adjudicator": "Human"
+  }
+}

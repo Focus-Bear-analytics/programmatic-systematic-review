@@ -781,7 +781,8 @@ def main() -> int:
         print("Could not find a DOI column (expected digitalObjectIdentifier or DOI).", file=sys.stderr)
         return 1
 
-    api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY") or os.getenv("S2_API_KEY")
+    # DISABLED 2026-06: dead institutional key (403). Force keyless S2 (200, 1 req/s).
+    api_key = None  # os.getenv("SEMANTIC_SCHOLAR_API_KEY") or os.getenv("S2_API_KEY")
     if api_key:
         print("Semantic Scholar: API key loaded; enforcing 1 request/s to api.semanticscholar.org.")
     else:

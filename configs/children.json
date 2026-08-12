@@ -1,0 +1,55 @@
+{
+  "name": "Children — digital interventions for ADHD/autism (under 18)",
+  "slug": "children",
+  "description": "Companion review focused on participants under 18. Carries forward under-18-flagged papers from the adults review and adds children-specific database exports.",
+  "paths": {
+    "data_dir": "search-results-from-database",
+    "review_subdir": "children",
+    "database_csvs_subdir": "database-csvs-children"
+  },
+  "inputs": {
+    "carry_forward": {
+      "from_config": "adults",
+      "csv": "combined/adjudicated.csv",
+      "filter": {
+        "column": "Final_has_under_18",
+        "value": "yes"
+      },
+      "source_label": "adults-carryforward"
+    }
+  },
+  "screening": {
+    "require_age": "has_under_18",
+    "include_when": {},
+    "exclude_when": {}
+  },
+  "aws_profile": "phd",
+  "raters": {
+    "a": {
+      "provider": "bedrock",
+      "model_id": "us.amazon.nova-2-lite-v1:0",
+      "label": "Nova 2 Lite",
+      "region": "us-east-1",
+      "prompt_suffix": ""
+    },
+    "b": {
+      "provider": "bedrock",
+      "model_id": "us.anthropic.claude-sonnet-4-6",
+      "label": "Claude Sonnet 4.6",
+      "region": "us-east-1",
+      "prompt_suffix": ""
+    },
+    "adjudicator": {
+      "provider": "human",
+      "model_id": "human",
+      "label": "Human (manual adjudication)",
+      "region": "",
+      "prompt_suffix": ""
+    }
+  },
+  "legacy_column_prefixes": {
+    "a": "RaterA",
+    "b": "RaterB",
+    "adjudicator": "Human"
+  }
+}
